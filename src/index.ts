@@ -2,14 +2,11 @@ import { Draft } from "immer"
 
 const AutoImmer = Symbol("AutoImmer")
 
-export type Auto<T> = T &
-  {
-    [key in keyof T]: T[key] extends {}
-      ? Auto<T[key]>
-      : T[key] extends []
-      ? Auto<T[key]>
-      : T[key]
-  }
+type BaseType = Array<any> | { [key: string]: any }
+
+export type Auto<T> = {
+  [key in keyof T]: T[key] extends BaseType ? Auto<T[key]> : T[key]
+} & { [AutoImmer]?: true }
 
 type Pointer = (string | number | symbol)[]
 
@@ -18,7 +15,7 @@ export type PathedProposer<T> = (path: Pointer, mutator: Mutator<T>) => void
 
 export type Mutator<T> = (draft: Draft<T>) => T | void
 
-export function auto<T extends Object>(
+export function auto<T extends BaseType>(
   target: T,
   propose: Proposer<T>
 ): Auto<T> {
@@ -43,21 +40,18 @@ export function isAuto<T>(o: any): o is Auto<T> {
   return o[AutoImmer]
 }
 
-export function fork<T extends Object>(
+export function fork<T extends BaseType>(
   target: T,
   propose: PathedProposer<T>,
   path: Pointer
 ): Auto<T> {
   const base: any = Array.isArray(target) ? [] : {}
   base[AutoImmer] = true
-  const proxy = new Proxy(
-    base as Auto<T>,
-    createProxyHandler(target, path, propose)
-  )
+  const proxy = new Proxy(base as T, createProxyHandler(target, path, propose))
   return proxy as Auto<T>
 }
 
-function createProxyHandler<T extends Object>(
+function createProxyHandler<T extends BaseType>(
   obj: T,
   path: Pointer,
   propose: PathedProposer<T>
